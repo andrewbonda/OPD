@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Python Flowchart Generator</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+    #container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+    #editor {
+      width: 50%;
+      display: flex;
+      flex-direction: column;
+    }
+    #code {
+      flex: 1;
+      width: 100%;
+      border: none;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+    }
+    #resizer {
+      width: 6px;
+      cursor: ew-resize;
+      background: #ccc;
+    }
+    #chart {
+      flex: 1;
+      position: relative;
+      background: #fff;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+    .block {
+      fill: #e8f1f8;
+      stroke: #333;
+      stroke-width: 1.2;
+    }
+    .text {
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="editor">
+      <textarea id="code" placeholder="Write Python code here..."></textarea>
+    </div>
+    <div id="resizer"></div>
+    <div id="chart">
+      <svg id="svg">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#333" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    // Make the code editor pane resizable by dragging
+    const resizer = document.getElementById('resizer');
+    const editor = document.getElementById('editor');
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', () => { isResizing = true; });
+    document.addEventListener('mousemove', e => {
+      if (!isResizing) return;
+      editor.style.width = e.clientX + 'px';
+    });
+    document.addEventListener('mouseup', () => { isResizing = false; });
+
+    const code = document.getElementById('code');
+    const svg = document.getElementById('svg');
+    code.addEventListener('input', render);
+
+    function clearSVG() {
+      while (svg.lastChild && svg.lastChild.tagName !== 'defs') {
+        svg.removeChild(svg.lastChild);
+      }
+    }
+
+    function render() {
+      clearSVG();
+      const lines = code.value.split('\n');
+      const nodes = [{ type: 'start', text: 'Start' }];
+
+      lines.forEach(line => {
+        const txt = line.trim();
+        if (!txt) return;
+        if (/^if\b/.test(txt)) nodes.push({ type: 'condition', text: txt });
+        else if (/^for\b/.test(txt) || /^while\b/.test(txt)) nodes.push({ type: 'loop', text: txt });
+        else if (/print\b/.test(txt) || /input\b/.test(txt)) nodes.push({ type: 'io', text: txt });
+        else nodes.push({ type: 'process', text: txt });
+      });
+      nodes.push({ type: 'end', text: 'End' });
+
+      const spacingY = 80;
+      const centerX = 200;
+
+      nodes.forEach((node, i) => {
+        const y = 50 + i * spacingY;
+        drawNode(centerX, y, node);
+        if (i > 0) {
+          const prev = nodes[i - 1];
+          if (prev.type === 'condition') {
+            // yes path: straight down
+            drawArrow(centerX, y - spacingY + 20, centerX, y - 30);
+            // no path: curve to right then down
+            const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+            const startX = centerX;
+            const startY = y - spacingY + 20;
+            const viaX = centerX + 100;
+            const viaY = (startY + (y - 30)) / 2;
+            path.setAttribute('d', `M${startX},${startY} Q${viaX},${viaY} ${centerX},${y - 30}`);
+            path.setAttribute('stroke','#333');
+            path.setAttribute('fill','none');
+            path.setAttribute('marker-end','url(#arrow)');
+            svg.appendChild(path);
+          } else {
+            drawArrow(centerX, y - spacingY + 20, centerX, y - 30);
+          }
+        }
+      });
+    }
+
+    function drawNode(x, y, node) {
+      const w = 140;
+      const h = 40;
+      let elem;
+
+      switch (node.type) {
+        case 'start':
+        case 'end':
+          elem = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+          elem.setAttribute('cx', x);
+          elem.setAttribute('cy', y);
+          elem.setAttribute('rx', w / 2);
+          elem.setAttribute('ry', h / 2);
+          break;
+        case 'process':
+          elem = document.createElementNS('http://www.w3.org/2000/svg','rect');
+          elem.setAttribute('x', x - w / 2);
+          elem.setAttribute('y', y - h / 2);
+          elem.setAttribute('width', w);
+          elem.setAttribute('height', h);
+          break;
+        case 'io':
+          elem = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+          elem.setAttribute('points', `${x - w/2+20},${y - h/2} ${x + w/2},${y - h/2} ${x + w/2-20},${y + h/2} ${x - w/2},${y + h/2}`);
+          break;
+        case 'condition':
+          elem = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+          elem.setAttribute('points', `${x},${y - h/2} ${x + w/2},${y} ${x},${y + h/2} ${x - w/2},${y}`);
+          // labels
+          ['yes','no'].forEach((lbl, idx) => {
+            const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','text');
+            if (lbl === 'yes') { t.setAttribute('x', x + w/2 + 5); t.setAttribute('y', y - 5); }
+            else { t.setAttribute('x', x - w/2 - 15); t.setAttribute('y', y + 15); }
+            t.textContent = lbl;
+            svg.appendChild(t);
+          });
+          break;
+        case 'loop':
+          elem = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+          const hx = w / 2;
+          const hy = h / 2;
+          elem.setAttribute('points', `${x-hx+20},${y-hy} ${x+hx-20},${y-hy} ${x+hx},${y} ${x+hx-20},${y+hy} ${x-hx+20},${y+hy} ${x-hx},${y}`);
+          break;
+      }
+
+      elem.setAttribute('class','block');
+      svg.appendChild(elem);
+      const txtElem = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txtElem.setAttribute('class','text');
+      txtElem.setAttribute('x', x);
+      txtElem.setAttribute('y', y + 4);
+      txtElem.setAttribute('text-anchor','middle');
+      txtElem.textContent = node.text;
+      svg.appendChild(txtElem);
+    }
+
+    function drawArrow(x1, y1, x2, y2) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      line.setAttribute('stroke','#333');
+      line.setAttribute('marker-end','url(#arrow)');
+      svg.appendChild(line);
+    }
+
+    render();
+  </script>
+</body>
+</html>
