@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python Code to Flowchart</title>
+  <!-- CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+  <style>
+    /* Container holds editor and diagram panes */
+    #container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Editor pane styling */
+    #editor-pane {
+      width: 50%; /* initial width */
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Toolbar above editor */
+    #toolbar {
+      padding: 5px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #ccc;
+    }
+    /* Drag bar between panes */
+    #dragbar {
+      width: 5px;
+      cursor: col-resize;
+      background: #ddd;
+    }
+    /* Diagram pane styling */
+    #diagram-pane {
+      flex: 1;
+      position: relative;
+    }
+    /* Make canvas fill pane */
+    #flowchart-canvas {
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!-- Buttons for inserting example code -->
+  <div id="toolbar">
+    <button id="example1">Example 1</button>
+    <button id="example2">Example 2</button>
+    <button id="example3">Example 3</button>
+  </div>
+  <div id="container">
+    <!-- Code editor pane -->
+    <div id="editor-pane">
+      <textarea id="code-editor"></textarea>
+    </div>
+    <!-- Draggable divider -->
+    <div id="dragbar"></div>
+    <!-- Flowchart drawing pane -->
+    <div id="diagram-pane">
+      <canvas id="flowchart-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+  <script>
+    // Initialize CodeMirror editor
+    const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+      lineNumbers: true,        // display line numbers
+      mode: 'python',           // use python syntax highlighting
+      indentUnit: 4,            // indent by 4 spaces
+      theme: 'default'          // simple theme
+    });
+
+    // Set up resizable divider
+    const dragbar = document.getElementById('dragbar');
+    const leftPane = document.getElementById('editor-pane');
+    let isDragging = false;     // track drag state
+
+    // when mouse button pressed on dragbar
+    dragbar.addEventListener('mousedown', () => {
+      isDragging = true;
+    });
+    // when mouse moved
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;  // only if dragging
+      // calculate new width for editor pane
+      const newWidth = e.clientX / window.innerWidth * 100;
+      leftPane.style.width = newWidth + '%';
+      editor.refresh();         // refresh CodeMirror layout
+    });
+    // stop dragging on mouse up
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    // Get canvas context
+    const canvas = document.getElementById('flowchart-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Resize canvas to match element size
+    function resizeCanvas() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      drawFlowchart();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Parse Python code into basic flow elements (start, end, process, decision)
+    function parseCode(code) {
+      // split code into lines
+      const lines = code.split('\n');
+      const elements = [];
+      // always start with Start block
+      elements.push({ type: 'start', text: 'Start' });
+      // simple parser: iterate lines
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('for ') || trimmed.startsWith('while ')) {
+          elements.push({ type: 'loop', text: trimmed });
+        } else if (trimmed.startsWith('if ') || trimmed.startsWith('elif ') || trimmed.startsWith('else')) {
+          elements.push({ type: 'decision', text: trimmed });
+        } else if (trimmed.startsWith('print(') || trimmed.includes('input(')) {
+          elements.push({ type: 'io', text: trimmed });
+        } else if (trimmed.length > 0) {
+          elements.push({ type: 'process', text: trimmed });
+        }
+      });
+      // always end with End block
+      elements.push({ type: 'end', text: 'End' });
+      return elements;
+    }
+
+    // Draw flowchart based on parsed elements
+    function drawFlowchart() {
+      // clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // get code text
+      const code = editor.getValue();
+      const elems = parseCode(code);
+      // layout variables
+      const boxWidth = 200;
+      const boxHeight = 50;
+      const spacingY = 80;
+      let x = canvas.width / 2 - boxWidth / 2;
+      let y = 20;
+
+      elems.forEach((el, i) => {
+        // set style
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        // draw shapes based on type
+        switch (el.type) {
+          case 'start':
+          case 'end':
+            // ellipse for start/end
+            ctx.beginPath();
+            ctx.ellipse(x + boxWidth/2, y + boxHeight/2, boxWidth/2, boxHeight/2, 0, 0, 2*Math.PI);
+            ctx.stroke();
+            break;
+          case 'process':
+            // rectangle
+            ctx.strokeRect(x, y, boxWidth, boxHeight);
+            break;
+          case 'io':
+            // parallelogram
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y);
+            ctx.lineTo(x + boxWidth, y);
+            ctx.lineTo(x + boxWidth - 20, y + boxHeight);
+            ctx.lineTo(x, y + boxHeight);
+            ctx.closePath();
+            ctx.stroke();
+            break;
+          case 'decision':
+            // diamond
+            ctx.beginPath();
+            ctx.moveTo(x + boxWidth/2, y);
+            ctx.lineTo(x + boxWidth, y + boxHeight/2);
+            ctx.lineTo(x + boxWidth/2, y + boxHeight);
+            ctx.lineTo(x, y + boxHeight/2);
+            ctx.closePath();
+            ctx.stroke();
+            // add labels Yes/No
+            ctx.font = '12px Arial';
+            ctx.fillText('Yes', x + boxWidth + 5, y + boxHeight/2 - 5);
+            ctx.fillText('No', x - 25, y + boxHeight/2 - 5);
+            break;
+          case 'loop':
+            // hexagon
+            ctx.beginPath();
+            const h = boxHeight;
+            const w = boxWidth;
+            const cx = x;
+            const cy = y;
+            ctx.moveTo(cx + w*0.25, cy);
+            ctx.lineTo(cx + w*0.75, cy);
+            ctx.lineTo(cx + w, cy + h/2);
+            ctx.lineTo(cx + w*0.75, cy + h);
+            ctx.lineTo(cx + w*0.25, cy + h);
+            ctx.lineTo(cx, cy + h/2);
+            ctx.closePath();
+            ctx.stroke();
+            break;
+        }
+        // draw text inside
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(el.text, x + boxWidth/2, y + boxHeight/2, boxWidth - 10);
+        // draw arrow to next
+        if (i < elems.length - 1) {
+          const startX = x + boxWidth/2;
+          const startY = y + boxHeight;
+          const endX = startX;
+          const endY = y + spacingY;
+          // line
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+          // arrowhead
+          ctx.beginPath();
+          ctx.moveTo(endX - 5, endY - 10);
+          ctx.lineTo(endX, endY);
+          ctx.lineTo(endX + 5, endY - 10);
+          ctx.stroke();
+        }
+        // increment y position
+        y += spacingY;
+      });
+    }
+
+    // Redraw on code change
+    editor.on('change', drawFlowchart);
+
+    // Example code snippets
+    const examples = [
+      'for i in range(5):\n    print(i)',
+      'x = input("Enter a number: ")\nif int(x) > 0:\n    print("Positive")\nelse:\n    print("Non-positive")',
+      'i = 0\nwhile i < 3:\n    print(i)\n    i += 1'
+    ];
+    document.getElementById('example1').onclick = () => editor.setValue(examples[0]);
+    document.getElementById('example2').onclick = () => editor.setValue(examples[1]);
+    document.getElementById('example3').onclick = () => editor.setValue(examples[2]);
+
+  </script>
+</body>
+</html>
